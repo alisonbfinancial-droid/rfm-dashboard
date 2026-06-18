@@ -1,1 +1,690 @@
-# rfm-dashboard
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RFM Command Center</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --red:#8B1A1A; --red-light:#f5e8e8; --red-mid:#c94040;
+  --navy:#1a2332; --gold:#c49a2a; --gold-light:#fdf6e3;
+  --white:#ffffff; --surface:#f7f5f2; --surface2:#ede9e4;
+  --text:#1a1a1a; --text-muted:#6b6b6b; --text-light:#999;
+  --border:#ddd8d0; --green:#2d7a4f; --amber:#b86a00;
+}
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--surface); color:var(--text); min-height:100vh; font-size:13px; }
+
+/* TOP BAR */
+.topbar { background:var(--navy); color:white; padding:0 20px; display:flex; align-items:center; justify-content:space-between; height:50px; position:sticky; top:0; z-index:100; border-bottom:3px solid var(--red); }
+.topbar-left { display:flex; align-items:center; gap:12px; }
+.logo { font-size:18px; font-weight:700; color:white; letter-spacing:.05em; }
+.logo span { color:var(--gold); }
+.tagline { font-size:11px; color:rgba(255,255,255,.5); letter-spacing:.08em; text-transform:uppercase; }
+.topbar-right { display:flex; align-items:center; gap:16px; }
+.clock { font-size:20px; font-weight:300; color:white; font-variant-numeric:tabular-nums; }
+.date-display { font-size:11px; color:rgba(255,255,255,.55); text-align:right; }
+.api-status { display:flex; align-items:center; gap:5px; font-size:11px; color:rgba(255,255,255,.6); }
+.dot { width:7px; height:7px; border-radius:50%; background:#4caf50; animation:pulse 2s infinite; }
+.dot.warn { background:var(--gold); }
+.dot.error { background:#f44336; animation:none; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+/* FOCUS BAR */
+.focus-bar { background:var(--red); color:white; padding:8px 20px; display:flex; align-items:center; gap:12px; font-size:12px; }
+.focus-label { font-weight:600; text-transform:uppercase; letter-spacing:.08em; font-size:10px; opacity:.8; white-space:nowrap; }
+.focus-input { flex:1; background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,.4); color:white; font-size:13px; padding:2px 0; outline:none; }
+.focus-input::placeholder { color:rgba(255,255,255,.5); }
+.stats-pills { display:flex; gap:8px; }
+.pill { background:rgba(255,255,255,.15); border-radius:20px; padding:3px 10px; font-size:11px; white-space:nowrap; }
+.pill strong { font-weight:700; }
+
+/* MAIN GRID */
+.main { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:12px 16px; }
+
+/* PANELS */
+.panel { background:var(--white); border-radius:8px; border:1px solid var(--border); overflow:hidden; display:flex; flex-direction:column; }
+.panel-header { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.panel-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--navy); display:flex; align-items:center; gap:6px; }
+.panel-body { flex:1; overflow-y:auto; }
+.panel-footer { padding:8px 14px; border-top:1px solid var(--border); background:var(--surface); }
+.panel-body::-webkit-scrollbar { width:4px; }
+.panel-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+/* CALENDAR */
+.panel-calendar { grid-column:1; grid-row:1/3; min-height:580px; }
+.gcal-signin-wrap { padding:20px 14px; text-align:center; }
+.gcal-signin-wrap p { font-size:12px; color:var(--text-muted); margin-bottom:16px; line-height:1.6; }
+.gcal-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 18px; background:white; border:1px solid var(--border); border-radius:6px; font-size:13px; font-weight:600; color:var(--navy); cursor:pointer; transition:box-shadow .15s; text-decoration:none; }
+.gcal-btn:hover { box-shadow:0 2px 8px rgba(0,0,0,.12); }
+.gcal-btn img { width:18px; height:18px; }
+.gcal-signout { font-size:11px; color:var(--text-muted); cursor:pointer; }
+.gcal-signout:hover { color:var(--red); }
+
+/* mini cal */
+.mini-cal { padding:0 14px 8px; }
+.mini-cal-header { display:flex; align-items:center; justify-content:space-between; padding:10px 0 8px; font-weight:700; font-size:13px; color:var(--navy); }
+.mini-cal-nav { background:none; border:1px solid var(--border); border-radius:4px; width:24px; height:24px; cursor:pointer; font-size:13px; color:var(--text-muted); display:flex; align-items:center; justify-content:center; }
+.mini-cal-nav:hover { background:var(--surface2); }
+.mini-cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.cal-dow { text-align:center; font-size:10px; font-weight:700; color:var(--text-muted); padding:3px 0; text-transform:uppercase; }
+.cal-day { text-align:center; font-size:12px; padding:5px 2px; border-radius:5px; cursor:pointer; color:var(--text); transition:background .1s; line-height:1; position:relative; }
+.cal-day:hover { background:var(--surface2); }
+.cal-day.other-month { color:var(--text-light); }
+.cal-day.today { background:var(--red); color:white; font-weight:700; }
+.cal-day.selected:not(.today) { background:var(--red-light); color:var(--red); font-weight:700; }
+.cal-day.has-event::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--gold); margin:2px auto 0; }
+.cal-day.today.has-event::after { background:rgba(255,255,255,.8); }
+
+/* agenda */
+.agenda-section { padding:0 14px 14px; }
+.agenda-date-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--text-muted); padding:8px 0 6px; border-top:1px solid var(--border); }
+.agenda-event { display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px solid var(--border); }
+.agenda-event:last-child { border-bottom:none; }
+.agenda-time { font-size:11px; color:var(--text-muted); white-space:nowrap; min-width:52px; padding-top:1px; }
+.agenda-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.agenda-title { font-size:12px; font-weight:600; }
+.agenda-sub { font-size:11px; color:var(--text-muted); }
+.agenda-empty { font-size:12px; color:var(--text-muted); padding:10px 0; font-style:italic; }
+.agenda-loading { font-size:12px; color:var(--text-muted); padding:12px 0; }
+.agenda-add { display:flex; align-items:center; gap:6px; padding:8px 0; font-size:12px; color:var(--red); cursor:pointer; font-weight:600; text-decoration:none; }
+
+/* CALL LIST */
+.panel-calls { grid-column:2; grid-row:1; }
+.search-bar { padding:8px 14px; border-bottom:1px solid var(--border); }
+.search-bar input { width:100%; padding:5px 10px; border:1px solid var(--border); border-radius:4px; font-size:12px; outline:none; background:var(--surface); }
+.search-bar input:focus { border-color:var(--red-mid); }
+.call-item { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s; }
+.call-item:hover { background:var(--surface); }
+.call-item:last-child { border-bottom:none; }
+.avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+.avatar.client { background:#e8f0fe; color:#1a56c4; }
+.avatar.prospect { background:var(--gold-light); color:var(--gold); }
+.avatar.hot { background:#fce8e6; color:#c5221f; }
+.call-info { flex:1; min-width:0; }
+.call-name { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.call-detail { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.call-badge { font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; white-space:nowrap; }
+.badge-client { background:#e8f0fe; color:#1a56c4; }
+.badge-prospect { background:var(--gold-light); color:var(--amber); }
+.badge-hot { background:#fce8e6; color:#c5221f; }
+.call-done { opacity:.4; }
+.call-done .call-name { text-decoration:line-through; }
+.call-check { width:18px; height:18px; border:1.5px solid var(--border); border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:all .15s; }
+.call-check:hover { border-color:var(--green); }
+.call-check.checked { background:var(--green); border-color:var(--green); color:white; font-size:10px; font-weight:700; }
+.load-msg { padding:20px 14px; color:var(--text-muted); font-size:12px; text-align:center; }
+.add-btn { font-size:11px; color:var(--red); cursor:pointer; font-weight:600; background:none; border:none; padding:0; letter-spacing:.05em; }
+.add-btn:hover { text-decoration:underline; }
+
+/* TASKS */
+.panel-tasks { grid-column:3; grid-row:1; }
+.task-item { display:flex; align-items:flex-start; gap:8px; padding:8px 14px; border-bottom:1px solid var(--border); }
+.task-item:last-child { border-bottom:none; }
+.task-priority { width:4px; border-radius:2px; align-self:stretch; flex-shrink:0; }
+.pri-high { background:#c5221f; }
+.pri-medium { background:var(--gold); }
+.pri-low { background:var(--border); }
+.task-cb { width:15px; height:15px; border:1.5px solid var(--border); border-radius:3px; flex-shrink:0; margin-top:1px; cursor:pointer; transition:all .15s; }
+.task-cb:hover { border-color:var(--green); }
+.task-cb.done { background:var(--green); border-color:var(--green); }
+.task-text { flex:1; font-size:12px; line-height:1.4; }
+.task-text.done { text-decoration:line-through; color:var(--text-light); }
+.task-due { font-size:10px; color:var(--text-light); }
+.task-due.overdue { color:#c5221f; font-weight:600; }
+
+/* TEAM */
+.panel-team { grid-column:2/4; grid-row:2; }
+.team-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); }
+.team-member { padding:10px 14px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:9px; }
+.team-avatar { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+.team-name { font-weight:600; font-size:12px; }
+.team-role { font-size:10px; color:var(--text-muted); }
+.team-status { display:flex; align-items:center; gap:4px; font-size:10px; margin-top:2px; }
+.status-dot { width:6px; height:6px; border-radius:50%; }
+.status-active { background:#4caf50; }
+.status-onboard { background:var(--gold); }
+
+/* ADD MODAL */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:200; }
+.modal-overlay.open { display:flex; }
+.modal { background:white; border-radius:10px; padding:24px; width:360px; }
+.modal h3 { font-size:15px; color:var(--navy); margin-bottom:16px; }
+.modal label { display:block; font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.06em; }
+.modal input, .modal select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:5px; font-size:13px; margin-bottom:12px; outline:none; }
+.modal input:focus, .modal select:focus { border-color:var(--red); }
+.modal-btns { display:flex; gap:8px; justify-content:flex-end; }
+.btn-cancel { padding:8px 16px; border:1px solid var(--border); border-radius:5px; background:white; cursor:pointer; font-size:13px; }
+.btn-save { padding:8px 16px; background:var(--red); color:white; border:none; border-radius:5px; cursor:pointer; font-size:13px; font-weight:600; }
+
+@media (max-width:900px) {
+  .main { grid-template-columns:1fr 1fr; }
+  .panel-calendar { grid-column:1/3; grid-row:1; }
+  .panel-calls { grid-column:1; grid-row:2; }
+  .panel-tasks { grid-column:2; grid-row:2; }
+  .panel-team { grid-column:1/3; grid-row:3; }
+}
+</style>
+</head>
+<body>
+
+<!-- ADD CONTACT MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h3>Add to Call List</h3>
+    <label>Full Name</label><input id="newName" placeholder="Jane Smith" />
+    <label>Phone</label><input id="newPhone" placeholder="(503) 555-0100" />
+    <label>Type</label>
+    <select id="newType">
+      <option value="prospect">Prospect</option>
+      <option value="client">Client</option>
+      <option value="hot">Hot Lead</option>
+    </select>
+    <label>Note</label><input id="newNote" placeholder="Follow up re: IUL..." />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="addManualContact()">Add to List</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div>
+      <div class="logo">RFM <span>|</span> Revolution Financial</div>
+      <div class="tagline">Command Center · Keizer, Oregon</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="api-status"><div class="dot" id="apiDot"></div><span id="apiLabel">Loading…</span></div>
+    <div><div class="clock" id="clock">--:--</div><div class="date-display" id="dateDisplay">--</div></div>
+  </div>
+</div>
+
+<!-- FOCUS BAR -->
+<div class="focus-bar">
+  <span class="focus-label">Today's Focus</span>
+  <input class="focus-input" id="focusInput" placeholder="What's your #1 priority today?" />
+  <div class="stats-pills">
+    <div class="pill">Calls: <strong id="callCount">0</strong>/<strong id="callTotal">0</strong></div>
+    <div class="pill">Tasks: <strong id="taskDone">0</strong>/<strong id="taskTotal">0</strong></div>
+    <div class="pill">Team: <strong>35+</strong></div>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- CALENDAR -->
+  <div class="panel panel-calendar">
+    <div class="panel-header">
+      <div class="panel-title">📅 Calendar</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="calUserName" style="font-size:11px;color:var(--text-muted)"></span>
+        <span class="gcal-signout" id="signOutBtn" style="display:none" onclick="signOut()">Sign out</span>
+      </div>
+    </div>
+    <div class="panel-body" id="calPanel">
+      <!-- Sign-in state -->
+      <div id="calSignIn" class="gcal-signin-wrap">
+        <div style="font-size:40px;margin-bottom:12px;">📅</div>
+        <p>Connect your Google Calendar to see your real events, right here in your dashboard.</p>
+        <button class="gcal-btn" id="signInBtn" onclick="signIn()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.8 18.9 12 24 12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.3 35.5 26.8 36 24 36c-5.1 0-9.5-3.2-11.3-7.8l-6.5 5C9.6 39.6 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.9 2.4-2.5 4.5-4.5 5.9l6.2 5.2C36.9 36.9 44 31 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+          Sign in with Google
+        </button>
+        <div style="margin-top:14px;font-size:11px;color:var(--text-muted)">Your calendar data stays private —<br>it never leaves your browser.</div>
+      </div>
+
+      <!-- Calendar state (hidden until signed in) -->
+      <div id="calContent" style="display:none">
+        <div style="padding:10px 14px 0;display:flex;gap:8px;">
+          <a href="https://calendar.google.com/calendar/r/day" target="_blank" style="flex:1;display:block;padding:8px;background:var(--red);color:white;border-radius:6px;text-align:center;text-decoration:none;font-size:12px;font-weight:600;">Open Google Calendar</a>
+          <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" style="padding:8px 12px;background:white;color:var(--navy);border:1px solid var(--border);border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">+ New</a>
+        </div>
+        <div class="mini-cal">
+          <div class="mini-cal-header">
+            <button class="mini-cal-nav" onclick="changeMonth(-1)">‹</button>
+            <span id="miniCalTitle"></span>
+            <button class="mini-cal-nav" onclick="changeMonth(1)">›</button>
+          </div>
+          <div class="mini-cal-grid" id="miniCalGrid"></div>
+        </div>
+        <div class="agenda-section" id="agendaSection"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CALL LIST -->
+  <div class="panel panel-calls">
+    <div class="panel-header">
+      <div class="panel-title">📞 Call List</div>
+      <button class="add-btn" onclick="openModal()">+ Add</button>
+    </div>
+    <div class="search-bar"><input type="text" id="callSearch" placeholder="Search contacts…" oninput="filterCalls()" /></div>
+    <div class="panel-body" id="callList"><div class="load-msg">⟳ Loading from Wealthbox…</div></div>
+    <div class="panel-footer" style="font-size:11px;color:var(--text-muted);">Priority contacts · <span id="callSource">Wealthbox</span></div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="panel panel-tasks">
+    <div class="panel-header">
+      <div class="panel-title">✅ Tasks</div>
+      <a href="https://app.crmworkspace.com/tasks" target="_blank" style="font-size:11px;color:var(--red);text-decoration:none;">Wealthbox →</a>
+    </div>
+    <div class="panel-body" id="taskList"><div class="load-msg">⟳ Loading tasks…</div></div>
+    <div class="panel-footer"><button class="add-btn" onclick="addQuickTask()">+ Quick task</button></div>
+  </div>
+
+  <!-- TEAM -->
+  <div class="panel panel-team">
+    <div class="panel-header">
+      <div class="panel-title">👥 RFM Team — Revolution Financial</div>
+      <span style="font-size:11px;color:var(--text-muted)">35+ associates · 8–10 active</span>
+    </div>
+    <div class="panel-body"><div class="team-grid" id="teamGrid"></div></div>
+  </div>
+
+</div>
+
+<!-- Google API -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+// ── CONFIG ─────────────────────────────────────────────
+const GCAL_CLIENT_ID = '927111188193-5o7lpo2g26qac05o5btg77mtb8dv4j0k.apps.googleusercontent.com';
+const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const WB_TOKEN = '539c5c6d4d5e4072ad81610a6bbcf84f';
+const FOCUS_KEY = 'rfm_focus';
+const GCAL_TOKEN_KEY = 'rfm_gcal_token';
+const GCAL_USER_KEY = 'rfm_gcal_user';
+
+// ── STATE ──────────────────────────────────────────────
+let callContacts = [];
+let localTasks = [];
+let gcalToken = localStorage.getItem(GCAL_TOKEN_KEY) || null;
+let calDate = new Date();
+let selectedDay = new Date();
+let calEvents = {}; // keyed by YYYY-MM-DD
+let tokenClient = null;
+
+const DEMO_CALLS = [
+  {id:1,name:'Sandra & Mike Torres',phone:'(503) 555-0142',type:'prospect',note:'Interested in IUL, 2 kids',done:false},
+  {id:2,name:'Robert Kim',phone:'(971) 555-0287',type:'hot',note:'Ready to sign — final review',done:false},
+  {id:3,name:'Angela Whitefeather',phone:'(503) 555-0391',type:'client',note:'Annual review due',done:false},
+  {id:4,name:'David & Lisa Park',phone:'(503) 555-0514',type:'prospect',note:'Referred by Angela',done:false},
+  {id:5,name:'James Okonkwo',phone:'(971) 555-0622',type:'client',note:'Policy update question',done:false},
+  {id:6,name:'Maria Gutierrez',phone:'(503) 555-0733',type:'prospect',note:'Small biz owner, SEP IRA',done:false},
+  {id:7,name:'Tom Bradley',phone:'(971) 555-0845',type:'hot',note:'Callback from last week',done:false},
+];
+const DEMO_TASKS = [
+  {id:1,text:'Send IUL illustration to Torres family',due:'Today',priority:'high',done:false},
+  {id:2,text:'Follow up with Robert Kim re: final paperwork',due:'Today',priority:'high',done:false},
+  {id:3,text:'Post on RFM Instagram (An Abundant Life content)',due:'Today',priority:'medium',done:false},
+  {id:4,text:'Team check-in / week 2 onboarding call',due:'Today',priority:'medium',done:false},
+  {id:5,text:'Review September Grand Opening vendor list',due:'Tomorrow',priority:'low',done:false},
+  {id:6,text:'WILD Networking — schedule next Lunch & Learn',due:'This week',priority:'low',done:false},
+];
+const TEAM = [
+  {name:'Alison',role:'Agency Owner',status:'active',color:'#8B1A1A',bg:'#f5e8e8'},
+  {name:'Josh',role:'Co-Owner',status:'active',color:'#1a2332',bg:'#e8edf5'},
+  {name:'Marcus T.',role:'Senior Associate',status:'active',color:'#0d6b3f',bg:'#e8f5ee'},
+  {name:'Priya S.',role:'Associate',status:'active',color:'#5a1e8c',bg:'#f0e8fa'},
+  {name:'Derek L.',role:'Associate',status:'active',color:'#b86a00',bg:'#fff3e0'},
+  {name:'Carmen R.',role:'Associate',status:'active',color:'#c5221f',bg:'#fce8e6'},
+  {name:'Tanya M.',role:'In Onboarding',status:'onboard',color:'#b86a00',bg:'#fff3e0'},
+  {name:'Brian K.',role:'In Onboarding',status:'onboard',color:'#b86a00',bg:'#fff3e0'},
+  {name:'Nicole H.',role:'In Onboarding',status:'onboard',color:'#b86a00',bg:'#fff3e0'},
+  {name:'Sam W.',role:'Associate',status:'active',color:'#1a56c4',bg:'#e8f0fe'},
+  {name:'+ 25 associates',role:'Growing team',status:'inactive',color:'#999',bg:'#f0f0f0'},
+];
+
+// ── INIT ───────────────────────────────────────────────
+window.addEventListener('load', () => {
+  startClock();
+  loadFocus();
+  renderTeam();
+  loadWealthboxContacts();
+  loadWealthboxTasks();
+  initGoogleAuth();
+});
+
+// ── CLOCK ──────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const n = new Date();
+    document.getElementById('clock').textContent = n.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('dateDisplay').textContent = n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  }
+  tick(); setInterval(tick,1000);
+}
+
+function loadFocus() {
+  document.getElementById('focusInput').value = localStorage.getItem(FOCUS_KEY)||'';
+  document.getElementById('focusInput').addEventListener('input',e=>localStorage.setItem(FOCUS_KEY,e.target.value));
+}
+
+function setApiStatus(state, label) {
+  const dot = document.getElementById('apiDot');
+  dot.className = 'dot' + (state==='ok'?'':state==='warn'?' warn':' error');
+  document.getElementById('apiLabel').textContent = label;
+}
+
+// ── WEALTHBOX ──────────────────────────────────────────
+async function loadWealthboxContacts() {
+  try {
+    const res = await fetch('https://api.crmworkspace.com/v1/contacts?per_page=50',{headers:{'ACCESS_TOKEN':WB_TOKEN}});
+    if(!res.ok) throw new Error();
+    const data = await res.json();
+    const contacts = (data.contacts||[]).map((c,i)=>({
+      id:c.id||i,
+      name:[c.first_name,c.last_name].filter(Boolean).join(' ')||'Unknown',
+      phone:(c.phone_numbers&&c.phone_numbers[0])?c.phone_numbers[0].address:'',
+      type:c.contact_type==='Client'?'client':'prospect',
+      note:c.background||'',
+      done:false
+    }));
+    callContacts = contacts.length>0 ? contacts : DEMO_CALLS;
+    setApiStatus('ok','Wealthbox live');
+    document.getElementById('callSource').textContent='Live · Wealthbox';
+  } catch(e) {
+    callContacts = DEMO_CALLS;
+    setApiStatus('warn','Demo mode');
+  }
+  renderCallList(callContacts);
+}
+
+async function loadWealthboxTasks() {
+  try {
+    const res = await fetch('https://api.crmworkspace.com/v1/tasks?complete=false&per_page=20',{headers:{'ACCESS_TOKEN':WB_TOKEN}});
+    if(!res.ok) throw new Error();
+    const data = await res.json();
+    const tasks = (data.tasks||[]).map((t,i)=>({
+      id:t.id||i,
+      text:t.name||t.description||'Task',
+      due:t.due_date?formatDate(t.due_date):'No date',
+      priority:t.priority===1?'high':t.priority===2?'medium':'low',
+      done:t.complete||false
+    }));
+    localTasks = tasks.length>0 ? tasks : DEMO_TASKS;
+  } catch(e) {
+    localTasks = DEMO_TASKS;
+  }
+  renderTaskList();
+}
+
+// ── GOOGLE CALENDAR AUTH ───────────────────────────────
+function initGoogleAuth() {
+  // Try to restore previous session
+  const savedToken = localStorage.getItem(GCAL_TOKEN_KEY);
+  const savedUser = localStorage.getItem(GCAL_USER_KEY);
+  if (savedToken) {
+    gcalToken = savedToken;
+    showCalContent(savedUser || '');
+    fetchCalendarEvents();
+  }
+  // Initialize token client for OAuth
+  window.google && setupTokenClient();
+}
+
+function setupTokenClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GCAL_CLIENT_ID,
+    scope: GCAL_SCOPE,
+    callback: (resp) => {
+      if (resp.error) { console.error(resp); return; }
+      gcalToken = resp.access_token;
+      localStorage.setItem(GCAL_TOKEN_KEY, gcalToken);
+      // Get user info
+      fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+gcalToken}})
+        .then(r=>r.json()).then(u=>{
+          const name = u.name || u.email || '';
+          localStorage.setItem(GCAL_USER_KEY, name);
+          showCalContent(name);
+          fetchCalendarEvents();
+        });
+    }
+  });
+}
+
+function signIn() {
+  if (!tokenClient) {
+    // GSI not loaded yet, wait and retry
+    setTimeout(()=>{
+      if(window.google) { setupTokenClient(); tokenClient.requestAccessToken(); }
+    }, 500);
+    return;
+  }
+  tokenClient.requestAccessToken();
+}
+
+function signOut() {
+  if (gcalToken) google.accounts.oauth2.revoke(gcalToken);
+  gcalToken = null;
+  calEvents = {};
+  localStorage.removeItem(GCAL_TOKEN_KEY);
+  localStorage.removeItem(GCAL_USER_KEY);
+  document.getElementById('calSignIn').style.display='block';
+  document.getElementById('calContent').style.display='none';
+  document.getElementById('signOutBtn').style.display='none';
+  document.getElementById('calUserName').textContent='';
+}
+
+function showCalContent(userName) {
+  document.getElementById('calSignIn').style.display='none';
+  document.getElementById('calContent').style.display='block';
+  document.getElementById('signOutBtn').style.display='inline';
+  if(userName) document.getElementById('calUserName').textContent = userName;
+  renderMiniCal();
+}
+
+// ── FETCH GOOGLE CALENDAR EVENTS ───────────────────────
+async function fetchCalendarEvents() {
+  if(!gcalToken) return;
+  try {
+    // Get all user calendars first
+    const listRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList',{
+      headers:{Authorization:'Bearer '+gcalToken}
+    });
+    if(listRes.status===401) { signOut(); return; }
+    const listData = await listRes.json();
+    const calendars = (listData.items||[]).filter(c=>c.selected!==false);
+
+    // Fetch events for next 60 days across all calendars
+    const now = new Date();
+    const end = new Date(); end.setDate(end.getDate()+60);
+    const timeMin = now.toISOString();
+    const timeMax = end.toISOString();
+
+    calEvents = {};
+    for(const cal of calendars.slice(0,5)) {
+      const evRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?`+
+        `timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=100`,
+        {headers:{Authorization:'Bearer '+gcalToken}}
+      );
+      if(!evRes.ok) continue;
+      const evData = await evRes.json();
+      for(const ev of (evData.items||[])) {
+        const start = ev.start.dateTime || ev.start.date;
+        const dk = start.substring(0,10);
+        if(!calEvents[dk]) calEvents[dk]=[];
+        calEvents[dk].push({
+          title: ev.summary || '(No title)',
+          time: ev.start.dateTime ? formatTime(ev.start.dateTime) : 'All day',
+          color: cal.backgroundColor || '#8B1A1A',
+          location: ev.location||'',
+          link: ev.htmlLink||''
+        });
+      }
+    }
+    // Sort events within each day
+    for(const dk of Object.keys(calEvents)) {
+      calEvents[dk].sort((a,b)=>{
+        if(a.time==='All day') return -1;
+        if(b.time==='All day') return 1;
+        return a.time.localeCompare(b.time);
+      });
+    }
+    renderMiniCal();
+    renderAgenda();
+  } catch(e) {
+    console.error('Calendar fetch error:', e);
+  }
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+}
+
+// ── MINI CALENDAR ──────────────────────────────────────
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOWS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+function dateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function todayKey() { return dateKey(new Date()); }
+
+function renderMiniCal() {
+  const y=calDate.getFullYear(), m=calDate.getMonth();
+  document.getElementById('miniCalTitle').textContent=`${MONTHS[m]} ${y}`;
+  const first=new Date(y,m,1).getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const prevDays=new Date(y,m,0).getDate();
+  const today=new Date();
+  let html=DOWS.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=first-1;i>=0;i--) html+=`<div class="cal-day other-month">${prevDays-i}</div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const dk=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
+    const isSel=selectedDay.getFullYear()===y&&selectedDay.getMonth()===m&&selectedDay.getDate()===d;
+    const hasEv=calEvents[dk]&&calEvents[dk].length>0;
+    const cls=['cal-day',isToday?'today':'',isSel&&!isToday?'selected':'',hasEv?'has-event':''].filter(Boolean).join(' ');
+    html+=`<div class="${cls}" onclick="selectDay(${y},${m},${d})">${d}</div>`;
+  }
+  const total=first+daysInMonth, rem=total%7===0?0:7-(total%7);
+  for(let d=1;d<=rem;d++) html+=`<div class="cal-day other-month">${d}</div>`;
+  document.getElementById('miniCalGrid').innerHTML=html;
+  renderAgenda();
+}
+
+function selectDay(y,m,d){ selectedDay=new Date(y,m,d); renderMiniCal(); }
+function changeMonth(dir){ calDate=new Date(calDate.getFullYear(),calDate.getMonth()+dir,1); renderMiniCal(); }
+
+function renderAgenda() {
+  const section=document.getElementById('agendaSection');
+  if(!section) return;
+  const dk=dateKey(selectedDay);
+  const isToday=dk===todayKey();
+  const label=isToday?'Today — '+selectedDay.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}):selectedDay.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  const events=calEvents[dk]||[];
+  let html=`<div class="agenda-date-label">${label}</div>`;
+  if(events.length===0){
+    html+=`<div class="agenda-empty">No events · <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" style="color:var(--red)">Add one →</a></div>`;
+  } else {
+    events.forEach(ev=>{
+      html+=`<div class="agenda-event">
+        <div class="agenda-time">${ev.time}</div>
+        <div class="agenda-dot" style="background:${ev.color}"></div>
+        <div>
+          <div class="agenda-title">${ev.link?`<a href="${ev.link}" target="_blank" style="color:var(--text);text-decoration:none;">${ev.title}</a>`:ev.title}</div>
+          ${ev.location?`<div class="agenda-sub">${ev.location}</div>`:''}
+        </div>
+      </div>`;
+    });
+  }
+  // Show next day with events
+  const tomorrow=new Date(selectedDay); tomorrow.setDate(tomorrow.getDate()+1);
+  const tmk=dateKey(tomorrow);
+  const tmEvents=calEvents[tmk]||[];
+  if(tmEvents.length>0){
+    html+=`<div class="agenda-date-label" style="margin-top:4px">${tomorrow.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>`;
+    tmEvents.slice(0,3).forEach(ev=>{
+      html+=`<div class="agenda-event">
+        <div class="agenda-time">${ev.time}</div>
+        <div class="agenda-dot" style="background:${ev.color}"></div>
+        <div><div class="agenda-title">${ev.title}</div></div>
+      </div>`;
+    });
+  }
+  html+=`<a class="agenda-add" href="https://calendar.google.com/calendar/r/eventedit" target="_blank">+ Add event in Google Calendar</a>`;
+  section.innerHTML=html;
+}
+
+// ── CALL LIST ──────────────────────────────────────────
+function getInitials(name){ return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+function renderCallList(list){
+  const q=(document.getElementById('callSearch').value||'').toLowerCase();
+  const filtered=list.filter(c=>!q||c.name.toLowerCase().includes(q)||(c.note||'').toLowerCase().includes(q));
+  const el=document.getElementById('callList');
+  if(!filtered.length){el.innerHTML='<div class="load-msg">No contacts found.</div>';updateStats();return;}
+  el.innerHTML=filtered.map(c=>`
+    <div class="call-item${c.done?' call-done':''}" id="ci-${c.id}">
+      <div class="avatar ${c.type}">${getInitials(c.name)}</div>
+      <div class="call-info">
+        <div class="call-name">${c.name}</div>
+        <div class="call-detail">${c.phone?c.phone+' · ':''}${c.note||''}</div>
+      </div>
+      <span class="call-badge badge-${c.type}">${c.type==='hot'?'🔥 Hot':c.type==='client'?'Client':'Prospect'}</span>
+      <div class="call-check${c.done?' checked':''}" onclick="toggleCall(${c.id})">${c.done?'✓':''}</div>
+    </div>`).join('');
+  updateStats();
+}
+
+function toggleCall(id){ const c=callContacts.find(x=>x.id===id); if(c){c.done=!c.done;renderCallList(callContacts);} }
+function filterCalls(){ renderCallList(callContacts); }
+function openModal(){ document.getElementById('addModal').classList.add('open'); }
+function closeModal(){ document.getElementById('addModal').classList.remove('open'); }
+function addManualContact(){
+  const name=document.getElementById('newName').value.trim(); if(!name)return;
+  callContacts.unshift({id:Date.now(),name,phone:document.getElementById('newPhone').value.trim(),type:document.getElementById('newType').value,note:document.getElementById('newNote').value.trim(),done:false});
+  closeModal(); renderCallList(callContacts);
+  document.getElementById('newName').value=''; document.getElementById('newPhone').value=''; document.getElementById('newNote').value='';
+}
+
+// ── TASKS ──────────────────────────────────────────────
+function formatDate(str){
+  const d=new Date(str),today=new Date(),diff=Math.floor((d-today)/86400000);
+  if(diff<0)return'Overdue'; if(diff===0)return'Today'; if(diff===1)return'Tomorrow';
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+function renderTaskList(){
+  const el=document.getElementById('taskList');
+  el.innerHTML=localTasks.map(t=>`
+    <div class="task-item">
+      <div class="task-priority pri-${t.priority}"></div>
+      <div class="task-cb${t.done?' done':''}" onclick="toggleTask(${t.id})"></div>
+      <div style="flex:1;min-width:0">
+        <div class="task-text${t.done?' done':''}">${t.text}</div>
+        <div class="task-due${t.due==='Overdue'?' overdue':''}">${t.due}</div>
+      </div>
+    </div>`).join('');
+  updateStats();
+}
+function toggleTask(id){ const t=localTasks.find(x=>x.id===id); if(t){t.done=!t.done;renderTaskList();} }
+function addQuickTask(){ const txt=prompt('New task:'); if(!txt)return; localTasks.unshift({id:Date.now(),text:txt,due:'Today',priority:'medium',done:false}); renderTaskList(); }
+
+function updateStats(){
+  document.getElementById('callCount').textContent=callContacts.filter(c=>c.done).length;
+  document.getElementById('callTotal').textContent=callContacts.length;
+  document.getElementById('taskDone').textContent=localTasks.filter(t=>t.done).length;
+  document.getElementById('taskTotal').textContent=localTasks.length;
+}
+
+// ── TEAM ───────────────────────────────────────────────
+function renderTeam(){
+  document.getElementById('teamGrid').innerHTML=TEAM.map(m=>`
+    <div class="team-member">
+      <div class="team-avatar" style="background:${m.bg};color:${m.color}">${getInitials(m.name)}</div>
+      <div>
+        <div class="team-name">${m.name}</div>
+        <div class="team-role">${m.role}</div>
+        ${m.status!=='inactive'?`<div class="team-status"><div class="status-dot status-${m.status}"></div>${m.status==='active'?'Active':'Onboarding'}</div>`:''}
+      </div>
+    </div>`).join('');
+}
+</script>
+</body>
+</html>
